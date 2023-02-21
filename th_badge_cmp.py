@@ -9,10 +9,10 @@ import json
 import pydoc
 import requests
 
-green = "\033[32m"
-cyan = "\033[36m"
-red = "\033[31m"
-reset = "\033[0m"
+
+CYAN = "\033[36m"
+RED = "\033[31m"
+RESET = "\033[m"
 
 
 def get_badges(username):
@@ -20,10 +20,16 @@ def get_badges(username):
     url = "http://telehack.com/u/" + username + ".json"
     response = requests.get(url)
     if response.status_code != 200:
-        return ({}, response.status_code)
+        err = response.status_code
+        if err == 404:
+            print(f"{err}: user {username} not found.")
+            sys.exit(1)
+        elif err:
+            print(f"{username}: {err}")
+            sys.exit(1)
+
     page_data = json.loads(response.text)
-    badges = page_data.get('badges')
-    return (badges, 0)
+    return page_data.get('badges')
 
 
 def get_difference(user_a, user_b, set_b, set_a):
@@ -31,27 +37,35 @@ def get_difference(user_a, user_b, set_b, set_a):
     missing_badges = sorted(list(set(set_a) - set(set_b)))
     out = ''
     thisthese = 'this'
-    count = len(missing_badges)    
-    if len(missing_badges) > 1:
+    count = len(missing_badges)
+    if count > 1:
         thisthese = 'these'
     if missing_badges:
-        badges = f"{thisthese} {len(missing_badges)} badge{'s'*(count>1)}"
-        out = f"[+] {user_a} is missing {badges} that {user_b} has:\n {red} "
+        badges = f"{thisthese} {count} badge{'s'*(count>1)}"
+        out = f"[+] {user_a} is missing {badges} that {user_b} has:\n{RED}"
         out += " ".join(missing_badges)
+        out += f"{RESET}"
     return out
 
 
 def delta_time(delta):
-    '''Calculate time differential'''
-    if ( delta + 0.5 ) < 60:
-        return f"{int(delta+0.5)} seconds"
-    if ( delta/60+0.5) < 60:
-        return f"{int(delta/60+0.5)} minutes"
-    if ( delta/3600+0.5) < 24:
-        return f"{int(delta/3600+0.5)} hours"
-    if ( delta/86400+0.5) < 365:
-        return f"{int(delta/86400+0.5)} days"
-    return f"{int(delta/31536000)} years"
+    '''Calculate time differential, returns a formatted string'''
+    seconds = delta+0.5
+    minutes = delta/60+0.5
+    hours   = delta/3600+0.5
+    days    = delta/86400+0.5
+    years   = delta/31536000
+
+    if seconds < 60:
+        return f"{int(seconds)} seconds"
+    if minutes < 60:
+        return f"{int(minutes)} minutes"
+    if hours < 24:
+        return f"{int(hours)} hours"
+    if days < 365:
+        return f"{int(days)} days"
+
+    return f"{int(years)} years"
 
 
 def user_delta(username,badges):
@@ -64,36 +78,26 @@ def user_delta(username,badges):
 
 
 def main(args):
-    '''Main function, takes command-line arguments, returns formatted string'''
-    out = ''
-
+    '''Main function, takes command-line arguments, invokes pager to display output'''
     user1 = args[1].upper()
     user2 = args[2].upper()
 
-    user1_badges, err = get_badges(user1)
-    if err == 404:
-        print(f"{err}: user {user1} not found.")
-        sys.exit(err)
-    elif err:
-        print(f"{user1}: {err}")
-        sys.exit(err)
+    if user1 == user2:
+        print(f"Error: cannot compare {args[1]} with {args[2]}.")
+        sys.exit(1)
 
-    user2_badges, err = get_badges(user2)
-    if err == 404:
-        print(f"{err}: user {user2} not found.")
-        sys.exit(err)
-    elif err:
-        print(f"{user2}: {err}")
-        sys.exit(err)
+    user1_badges = get_badges(user1)
+    user2_badges = get_badges(user2)
 
     # Badge count for each user
     len1 = len(user1_badges)
     len2 = len(user2_badges)
 
     hdr_message = f"{user1} ({len1}) vs {user2} ({len2})"
-    out += f"\n{hdr_message}\n"
-    out += ( "=" * len(hdr_message) ) + "\n\n"
 
+    out = ''
+    out += f"{hdr_message}\n"
+    out += ( "=" * len(hdr_message) ) + "\n\n"
     out += user_delta(user1,user1_badges)
     out += user_delta(user2,user2_badges)
 
@@ -103,8 +107,9 @@ def main(args):
     count = len(common_badges)
     if count > 1:
         thisthese = 'these'
-    out += f"\n[+] Both users have {thisthese} {count} badge{'s'*(count>1)}:\n {cyan} "
+    out += f"\n[+] Both users have {thisthese} {count} badge{'s'*(count>1)}:\n{CYAN}"
     out += " ".join(sorted(common_badges)) + "\n\n"
+    out += f"{RESET}"
 
     diff1 = get_difference(user1, user2, user1_badges, user2_badges)
     diff2 = get_difference(user2, user1, user2_badges, user1_badges)
@@ -115,7 +120,8 @@ def main(args):
         out += f"{user1} and {user2} have the same badges\n"
 
     out += "\nEnd of report"
-    pydoc.pager(out)
+    pydoc.pipepager(out, cmd='less -R')
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
