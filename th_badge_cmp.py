@@ -2,7 +2,7 @@
 
 '''Compare badges of two Telehack users'''
 
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import sys
 import json
@@ -71,7 +71,7 @@ def delta_time(delta):
 def user_delta(username,badges):
     '''Return formatted string of when user created account'''
     user_epoch = badges.get( 'ACCT' )
-    user_since = datetime.utcfromtimestamp(user_epoch).strftime('%Y-%m-%d %H:%M:%S')
+    user_since = datetime.fromtimestamp(user_epoch, timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
     now = time.time()
     user_deltatime = delta_time(now-user_epoch)
     return f"{username: <9} (user since {user_since}, {user_deltatime})\n"
